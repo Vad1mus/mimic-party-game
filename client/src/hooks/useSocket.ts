@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
+  CharacterId,
   MemeItem,
   ReactionEvent,
   RoomSettings,
@@ -12,6 +13,7 @@ import { SERVER_URL } from '../utils/serverUrl';
 const STORAGE_PLAYER_ID = 'mimic_player_id';
 const STORAGE_ROOM_CODE = 'mimic_room_code';
 const STORAGE_NICKNAME = 'mimic_nickname';
+const STORAGE_CHARACTER = 'mimic_character';
 
 function getStoredPlayerId(): string {
   let id = sessionStorage.getItem(STORAGE_PLAYER_ID);
@@ -32,6 +34,7 @@ export interface LocalRecordingMedia {
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [playerId, setPlayerId] = useState<string>(() => getStoredPlayerId());
@@ -55,16 +58,23 @@ export function useSocket() {
       reconnectionDelay: 800,
     });
     socketRef.current = socket;
+    setSocketInstance(socket);
 
     socket.on('connect', () => {
       setConnected(true);
       const savedCode = sessionStorage.getItem(STORAGE_ROOM_CODE);
       const savedNick = sessionStorage.getItem(STORAGE_NICKNAME);
+      const savedChar = sessionStorage.getItem(STORAGE_CHARACTER) as CharacterId | null;
       const pid = getStoredPlayerId();
       if (savedCode && savedNick) {
         socket.emit(
           'join_room',
-          { code: savedCode, playerId: pid, nickname: savedNick },
+          {
+            code: savedCode,
+            playerId: pid,
+            nickname: savedNick,
+            characterId: savedChar || undefined,
+          },
           (res: { ok: boolean; room?: RoomState; playerId?: string }) => {
             if (res?.ok && res.room) {
               setRoom(res.room);
@@ -124,13 +134,14 @@ export function useSocket() {
       clearLocalMedia();
       socket.disconnect();
       socketRef.current = null;
+      setSocketInstance(null);
     };
   }, [clearLocalMedia]);
 
   const clearError = useCallback(() => setError(null), []);
 
   const createRoom = useCallback(
-    (nickname: string): Promise<boolean> =>
+    (nickname: string, characterId?: CharacterId): Promise<boolean> =>
       new Promise((resolve) => {
         const socket = socketRef.current;
         if (!socket) {
@@ -141,11 +152,12 @@ export function useSocket() {
         const pid = getStoredPlayerId();
         socket.emit(
           'create_room',
-          { playerId: pid, nickname },
+          { playerId: pid, nickname, characterId },
           (res: { ok: boolean; room?: RoomState; playerId?: string; error?: string }) => {
             if (res?.ok && res.room) {
               sessionStorage.setItem(STORAGE_ROOM_CODE, res.room.code);
               sessionStorage.setItem(STORAGE_NICKNAME, nickname);
+              if (characterId) sessionStorage.setItem(STORAGE_CHARACTER, characterId);
               setPlayerId(res.playerId || pid);
               setRoom(res.room);
               setError(null);
@@ -161,7 +173,7 @@ export function useSocket() {
   );
 
   const joinRoom = useCallback(
-    (code: string, nickname: string): Promise<boolean> =>
+    (code: string, nickname: string, characterId?: CharacterId): Promise<boolean> =>
       new Promise((resolve) => {
         const socket = socketRef.current;
         if (!socket) {
@@ -172,11 +184,12 @@ export function useSocket() {
         const pid = getStoredPlayerId();
         socket.emit(
           'join_room',
-          { code, playerId: pid, nickname },
+          { code, playerId: pid, nickname, characterId },
           (res: { ok: boolean; room?: RoomState; playerId?: string; error?: string }) => {
             if (res?.ok && res.room) {
               sessionStorage.setItem(STORAGE_ROOM_CODE, res.room.code);
               sessionStorage.setItem(STORAGE_NICKNAME, nickname);
+              if (characterId) sessionStorage.setItem(STORAGE_CHARACTER, characterId);
               setPlayerId(res.playerId || pid);
               setRoom(res.room);
               setError(null);
@@ -198,12 +211,21 @@ export function useSocket() {
     setRoom(null);
   }, [clearLocalMedia]);
 
+  const selectCharacter = useCallback((characterId: CharacterId) => {
+    sessionStorage.setItem(STORAGE_CHARACTER, characterId);
+    socketRef.current?.emit('select_character', { characterId });
+  }, []);
+
   const toggleReady = useCallback(() => socketRef.current?.emit('toggle_ready'), []);
 
   const updateSettings = useCallback(
     (partial: Partial<RoomSettings>) => socketRef.current?.emit('update_settings', partial),
     []
   );
+
+  const togglePackMeme = useCallback((memeId: string) => {
+    socketRef.current?.emit('toggle_pack_meme', { memeId });
+  }, []);
 
   const startGame = useCallback(() => socketRef.current?.emit('start_game'), []);
 
@@ -223,9 +245,13 @@ export function useSocket() {
           resolve({ ok: false, error: 'Нет соединения с сервером.' });
           return;
         }
-        socket.emit('add_custom_meme', payload, (res: { ok: boolean; meme?: MemeItem; error?: string }) => {
-          resolve(res || { ok: false, error: 'Ошибка сервера.' });
-        });
+        socket.emit(
+          'add_custom_meme',
+          payload,
+          (res: { ok: boolean; meme?: MemeItem; error?: string }) => {
+            resolve(res || { ok: false, error: 'Ошибка сервера.' });
+          }
+        );
       }),
     []
   );
@@ -234,13 +260,6 @@ export function useSocket() {
     (memeId: string) => socketRef.current?.emit('remove_custom_meme', { memeId }),
     []
   );
-
-  const selectMeme = useCallback(
-    (memeId: string) => socketRef.current?.emit('select_meme', { memeId }),
-    []
-  );
-
-  const advanceFromDemo = useCallback(() => socketRef.current?.emit('advance_from_demo'), []);
 
   const submitRecording = useCallback(
     (payload: {
@@ -264,16 +283,7 @@ export function useSocket() {
 
   const skipRecording = useCallback(() => socketRef.current?.emit('skip_recording'), []);
 
-  const forceFinishRecording = useCallback(
-    () => socketRef.current?.emit('force_finish_recording'),
-    []
-  );
-
-  const galleryNavigate = useCallback(
-    (action: 'next' | 'prev' | 'replay' | 'ended') =>
-      socketRef.current?.emit('gallery_navigate', { action }),
-    []
-  );
+  const galleryClipEnded = useCallback(() => socketRef.current?.emit('gallery_clip_ended'), []);
 
   const sendReaction = useCallback(
     (emoji: string, targetPlayerId: string | null) =>
@@ -281,15 +291,12 @@ export function useSocket() {
     []
   );
 
-  const advanceToResults = useCallback(() => socketRef.current?.emit('advance_to_results'), []);
-
-  const nextRound = useCallback(() => socketRef.current?.emit('next_round'), []);
-
   const playAgain = useCallback(() => socketRef.current?.emit('play_again'), []);
 
   const me = room?.players.find((p) => p.id === playerId) || null;
 
   return {
+    socket: socketInstance,
     connected,
     room,
     me,
@@ -301,20 +308,17 @@ export function useSocket() {
     createRoom,
     joinRoom,
     leaveRoom,
+    selectCharacter,
     toggleReady,
     updateSettings,
+    togglePackMeme,
     startGame,
     addCustomMeme,
     removeCustomMeme,
-    selectMeme,
-    advanceFromDemo,
     submitRecording,
     skipRecording,
-    forceFinishRecording,
-    galleryNavigate,
+    galleryClipEnded,
     sendReaction,
-    advanceToResults,
-    nextRound,
     playAgain,
   };
 }

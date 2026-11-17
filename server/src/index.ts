@@ -42,12 +42,11 @@ const io = new Server(server, {
     origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
-  maxHttpBufferSize: 12 * 1024 * 1024, // 12 MB for custom memes/audio in RAM
+  maxHttpBufferSize: 12 * 1024 * 1024,
 });
 
 const roomManager = new RoomManager(io);
 
-// Serve built-in WAV memes with explicit CORS for Web Audio API decodeAudioData
 app.use(
   '/memes',
   (_req, res, next) => {
@@ -65,7 +64,6 @@ app.get('/api/memes', (_req, res) => {
   res.json({ memes: BUILT_IN_MEMES });
 });
 
-// Serve custom room memes straight from RAM (zero disk usage for Render Free Tier)
 app.get('/api/ram-meme/:code/:memeId', (req, res) => {
   const { code, memeId } = req.params;
   const entry = roomManager.getRamMeme(code, memeId);
@@ -99,11 +97,18 @@ io.on('connection', (socket) => {
     roomManager.leaveRoom(socket.id);
   });
 
+  socket.on('select_character', ({ characterId }, cb) => {
+    const res = roomManager.selectCharacter(socket.id, characterId);
+    cb?.(res);
+  });
+
   socket.on('toggle_ready', () => roomManager.toggleReady(socket.id));
 
   socket.on('update_settings', (partial) => roomManager.updateSettings(socket.id, partial || {}));
 
-  socket.on('start_game', () => roomManager.startGame(socket.id));
+  socket.on('toggle_pack_meme', ({ memeId }) => {
+    if (memeId) roomManager.togglePackMeme(socket.id, memeId);
+  });
 
   socket.on('add_custom_meme', (payload, cb) => {
     try {
@@ -137,11 +142,7 @@ io.on('connection', (socket) => {
     if (memeId) roomManager.removeCustomMeme(socket.id, memeId);
   });
 
-  socket.on('select_meme', ({ memeId }) => {
-    if (memeId) roomManager.selectMeme(socket.id, memeId);
-  });
-
-  socket.on('advance_from_demo', () => roomManager.advanceFromDemo(socket.id));
+  socket.on('start_game', () => roomManager.startGame(socket.id));
 
   socket.on('submit_recording', (payload, cb) => {
     try {
@@ -170,28 +171,50 @@ io.on('connection', (socket) => {
 
   socket.on('skip_recording', () => roomManager.skipRecording(socket.id));
 
-  socket.on('force_finish_recording', () => roomManager.forceFinishRecording(socket.id));
-
-  socket.on('gallery_navigate', ({ action }) => {
-    if (action) roomManager.galleryNavigate(socket.id, action);
-  });
+  socket.on('gallery_clip_ended', () => roomManager.galleryClipEnded(socket.id));
 
   socket.on('send_reaction', (payload) => {
     roomManager.sendReaction(socket.id, payload || { emoji: '🔥', targetPlayerId: null });
   });
 
-  socket.on('advance_to_results', () => roomManager.advanceToResults(socket.id));
-
-  socket.on('next_round', () => roomManager.nextRound(socket.id));
-
   socket.on('play_again', () => roomManager.playAgain(socket.id));
+
+  // WebRTC Mesh Voice Chat Signaling
+  socket.on('webrtc_offer', ({ targetPlayerId, sdp }) => {
+    const target = roomManager.getTargetSocketInRoom(socket.id, targetPlayerId);
+    if (target) {
+      io.to(target.socketId).emit('webrtc_offer', {
+        fromPlayerId: target.fromPlayerId,
+        sdp,
+      });
+    }
+  });
+
+  socket.on('webrtc_answer', ({ targetPlayerId, sdp }) => {
+    const target = roomManager.getTargetSocketInRoom(socket.id, targetPlayerId);
+    if (target) {
+      io.to(target.socketId).emit('webrtc_answer', {
+        fromPlayerId: target.fromPlayerId,
+        sdp,
+      });
+    }
+  });
+
+  socket.on('webrtc_ice_candidate', ({ targetPlayerId, candidate }) => {
+    const target = roomManager.getTargetSocketInRoom(socket.id, targetPlayerId);
+    if (target) {
+      io.to(target.socketId).emit('webrtc_ice_candidate', {
+        fromPlayerId: target.fromPlayerId,
+        candidate,
+      });
+    }
+  });
 
   socket.on('disconnect', () => {
     roomManager.handleDisconnect(socket.id);
   });
 });
 
-// Serve built client in single-server mode
 if (fs.existsSync(CLIENT_DIST_DIR)) {
   app.use(express.static(CLIENT_DIST_DIR));
   app.get('*', (_req, res) => {

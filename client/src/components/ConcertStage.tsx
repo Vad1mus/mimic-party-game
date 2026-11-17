@@ -27,7 +27,7 @@ export const ConcertStage: React.FC<ConcertStageProps> = ({
     ? players.filter((p) => p.id !== activePlayer.id)
     : players;
 
-  // Screen shake when someone screams loudly into mic/recording
+  // Screen shake on loud vocal peaks
   const shakeOffset =
     hasSpotlight && speakerVolume > 0.72
       ? {
@@ -43,26 +43,51 @@ export const ConcertStage: React.FC<ConcertStageProps> = ({
       className="relative w-full overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-b from-[#170c38] via-[#1f1049] to-[#120829] shadow-2xl"
     >
       {/* Overhead Concert Truss Lights */}
-      <div className="relative h-6 w-full border-b border-white/10 bg-black/45 flex items-center justify-around px-6">
+      <div className="relative h-5 w-full border-b border-white/10 bg-black/50 flex items-center justify-around px-4">
         {['#ec4899', '#22d3ee', '#f59e0b', '#a855f7', '#10b981'].map((col, i) => (
-          <div
+          <motion.div
             key={i}
-            className="h-2.5 w-6 rounded-b-full transition-opacity"
+            animate={
+              hasSpotlight
+                ? { opacity: [0.65, 1, 0.65], scale: [1, 1.15, 1] }
+                : { opacity: 0.45 }
+            }
+            transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.25 }}
+            className="h-2 w-5 sm:w-7 rounded-b-full"
             style={{
               backgroundColor: col,
-              boxShadow: `0 4px 18px ${col}`,
-              opacity: hasSpotlight ? 0.95 : 0.55,
+              boxShadow: `0 4px 16px ${col}`,
             }}
           />
         ))}
       </div>
 
-      {/* Main Spotlight Cone */}
+      {/* Sweeping Side Beams */}
+      <motion.div
+        animate={{ rotate: hasSpotlight ? [-6, 6, -6] : [-2, 2, -2] }}
+        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+        className="pointer-events-none absolute -top-6 left-4 h-64 w-32 origin-top opacity-25"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(34,211,238,0.45), transparent)',
+          clipPath: 'polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%)',
+        }}
+      />
+      <motion.div
+        animate={{ rotate: hasSpotlight ? [6, -6, 6] : [2, -2, 2] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="pointer-events-none absolute -top-6 right-4 h-64 w-32 origin-top opacity-25"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(236,72,153,0.45), transparent)',
+          clipPath: 'polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%)',
+        }}
+      />
+
+      {/* Main Center Spotlight Cone */}
       {hasSpotlight && (
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.75 + speakerVolume * 0.25 }}
-          className="pointer-events-none absolute inset-x-0 top-5 mx-auto h-72 w-72 sm:w-96"
+          animate={{ opacity: 0.72 + speakerVolume * 0.28 }}
+          className="pointer-events-none absolute inset-x-0 top-4 mx-auto h-72 w-64 sm:w-96"
           style={{
             background: isOriginalActive
               ? 'radial-gradient(ellipse at top, rgba(34,211,238,0.42), transparent 70%)'
@@ -74,68 +99,56 @@ export const ConcertStage: React.FC<ConcertStageProps> = ({
         />
       )}
 
-      {/* Stage Back Screen + Speakers (highlights during Original) */}
-      <div className="relative z-10 flex items-center justify-center gap-4 px-4 pt-4">
+      {/* Stage Back Screen + Pulsing Speakers */}
+      <div className="relative z-10 flex items-center justify-center gap-3 px-3 pt-3">
         <motion.div
-          animate={
+          animate={isOriginalActive ? { scale: 1 + speakerVolume * 0.16 } : { scale: 1 }}
+          className={`hidden sm:flex h-14 w-11 flex-col items-center justify-around rounded-xl border p-1 transition-colors ${
             isOriginalActive
-              ? { scale: 1 + speakerVolume * 0.14 }
-              : { scale: 1 }
-          }
-          className={`hidden sm:flex h-16 w-12 flex-col items-center justify-around rounded-xl border p-1.5 transition-colors ${
-            isOriginalActive
-              ? 'border-cyan-400 bg-cyan-950/60 shadow-[0_0_24px_rgba(34,211,238,0.4)]'
-              : 'border-white/10 bg-black/40 opacity-60'
+              ? 'border-cyan-400 bg-cyan-950/60 shadow-[0_0_24px_rgba(34,211,238,0.45)]'
+              : 'border-white/10 bg-black/40 opacity-55'
           }`}
         >
-          <div className="h-4 w-4 rounded-full bg-slate-800 ring-2 ring-cyan-400/50" />
-          <div className="h-6 w-6 rounded-full bg-slate-800 ring-2 ring-fuchsia-400/50" />
+          <div className="h-3.5 w-3.5 rounded-full bg-slate-800 ring-2 ring-cyan-400/60" />
+          <div className="h-5 w-5 rounded-full bg-slate-800 ring-2 ring-fuchsia-400/60" />
         </motion.div>
 
         <motion.div
-          animate={
+          animate={isOriginalActive ? { scale: 1.03 + speakerVolume * 0.05 } : { scale: 1 }}
+          className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-2 transition-all max-w-full ${
             isOriginalActive
-              ? { scale: 1.04 + speakerVolume * 0.04 }
-              : { scale: 1 }
-          }
-          className={`flex items-center gap-3 rounded-2xl border px-4 py-2.5 transition-all ${
-            isOriginalActive
-              ? 'border-cyan-300 bg-gradient-to-r from-cyan-500/25 via-fuchsia-500/20 to-amber-500/25 shadow-[0_0_30px_rgba(34,211,238,0.35)]'
-              : 'border-white/10 bg-black/35'
+              ? 'border-cyan-300 bg-gradient-to-r from-cyan-500/25 via-fuchsia-500/20 to-amber-500/25 shadow-[0_0_26px_rgba(34,211,238,0.35)]'
+              : 'border-white/10 bg-black/40'
           }`}
         >
-          <span className="text-2xl sm:text-3xl">{meme?.emoji || '🎬'}</span>
-          <div className="text-left">
+          <span className="text-xl sm:text-2xl shrink-0">{meme?.emoji || '🎬'}</span>
+          <div className="text-left min-w-0">
             <div className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-300 flex items-center gap-1">
               {isOriginalActive && <Volume2 className="h-3 w-3 animate-pulse" />}
               <span>{isOriginalActive ? 'Звучит оригинал!' : 'Мем раунда'}</span>
             </div>
-            <div className="font-display font-bold text-sm sm:text-base text-white">
+            <div className="font-display font-bold text-xs sm:text-sm text-white truncate">
               {meme?.title || 'Сцена готова'}
             </div>
           </div>
         </motion.div>
 
         <motion.div
-          animate={
+          animate={isOriginalActive ? { scale: 1 + speakerVolume * 0.16 } : { scale: 1 }}
+          className={`hidden sm:flex h-14 w-11 flex-col items-center justify-around rounded-xl border p-1 transition-colors ${
             isOriginalActive
-              ? { scale: 1 + speakerVolume * 0.14 }
-              : { scale: 1 }
-          }
-          className={`hidden sm:flex h-16 w-12 flex-col items-center justify-around rounded-xl border p-1.5 transition-colors ${
-            isOriginalActive
-              ? 'border-cyan-400 bg-cyan-950/60 shadow-[0_0_24px_rgba(34,211,238,0.4)]'
-              : 'border-white/10 bg-black/40 opacity-60'
+              ? 'border-cyan-400 bg-cyan-950/60 shadow-[0_0_24px_rgba(34,211,238,0.45)]'
+              : 'border-white/10 bg-black/40 opacity-55'
           }`}
         >
-          <div className="h-4 w-4 rounded-full bg-slate-800 ring-2 ring-cyan-400/50" />
-          <div className="h-6 w-6 rounded-full bg-slate-800 ring-2 ring-fuchsia-400/50" />
+          <div className="h-3.5 w-3.5 rounded-full bg-slate-800 ring-2 ring-cyan-400/60" />
+          <div className="h-5 w-5 rounded-full bg-slate-800 ring-2 ring-fuchsia-400/60" />
         </motion.div>
       </div>
 
-      {/* Back Row / Full Lineup */}
-      <div className="relative z-10 px-3 pt-4 pb-3">
-        <div className="flex flex-wrap items-end justify-center gap-2 sm:gap-4">
+      {/* Responsive Mobile-First 2x5 Grid / Desktop Lineup */}
+      <div className="relative z-10 px-2 sm:px-4 pt-3 pb-2">
+        <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-end justify-items-center sm:justify-center gap-1.5 sm:gap-3.5">
           {backRowPlayers.map((p) => {
             const isDimmed = Boolean(activePlayer) || isOriginalActive;
             const isMe = p.id === myPlayerId;
@@ -144,23 +157,33 @@ export const ConcertStage: React.FC<ConcertStageProps> = ({
                 layout
                 key={p.id}
                 transition={{ type: 'spring', stiffness: 280, damping: 24 }}
-                className="flex flex-col items-center"
+                className="flex flex-col items-center w-full sm:w-auto"
               >
-                <CharacterAvatar
-                  characterId={p.characterId}
-                  size={isDimmed ? 56 : 72}
-                  dimmed={isDimmed}
-                  idle={p.connected}
-                />
+                <div className="sm:hidden">
+                  <CharacterAvatar
+                    characterId={p.characterId}
+                    size={isDimmed ? 44 : 52}
+                    dimmed={isDimmed}
+                    idle={p.connected}
+                  />
+                </div>
+                <div className="hidden sm:block">
+                  <CharacterAvatar
+                    characterId={p.characterId}
+                    size={isDimmed ? 58 : 74}
+                    dimmed={isDimmed}
+                    idle={p.connected}
+                  />
+                </div>
                 <div
-                  className={`mt-1 flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold backdrop-blur ${
+                  className={`mt-0.5 flex items-center gap-0.5 rounded-full px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[11px] font-bold backdrop-blur max-w-full ${
                     isMe
-                      ? 'bg-fuchsia-500/35 border border-fuchsia-300/50 text-white'
-                      : 'bg-black/45 text-white/80'
+                      ? 'bg-fuchsia-500/40 border border-fuchsia-300/50 text-white'
+                      : 'bg-black/50 text-white/80'
                   } ${isDimmed ? 'opacity-50' : ''}`}
                 >
-                  {p.isHost && <Crown className="h-2.5 w-2.5 text-amber-300" />}
-                  <span className="max-w-[74px] truncate">{p.nickname}</span>
+                  {p.isHost && <Crown className="h-2.5 w-2.5 text-amber-300 shrink-0" />}
+                  <span className="truncate max-w-[54px] sm:max-w-[82px]">{p.nickname}</span>
                 </div>
               </motion.div>
             );
@@ -173,34 +196,65 @@ export const ConcertStage: React.FC<ConcertStageProps> = ({
         <motion.div
           layout
           key={activePlayer.id}
-          initial={{ y: 30, scale: 0.7, opacity: 0 }}
+          initial={{ y: 24, scale: 0.72, opacity: 0 }}
           animate={{ y: 0, scale: 1, opacity: 1 }}
-          exit={{ y: 20, scale: 0.7, opacity: 0 }}
+          exit={{ y: 18, scale: 0.72, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-          className="relative z-20 flex flex-col items-center pb-5 pt-1"
+          className="relative z-20 flex flex-col items-center pb-4 pt-1"
         >
+          {/* Floating music notes when loudly performing */}
+          {speakerVolume > 0.28 && (
+            <div className="pointer-events-none absolute -top-2 flex gap-6 text-lg">
+              <motion.span
+                animate={{ y: [-4, -22], opacity: [0.9, 0] }}
+                transition={{ duration: 0.9, repeat: Infinity }}
+              >
+                🎵
+              </motion.span>
+              <motion.span
+                animate={{ y: [-2, -26], opacity: [0.9, 0] }}
+                transition={{ duration: 1.1, repeat: Infinity, delay: 0.3 }}
+              >
+                ✨
+              </motion.span>
+            </div>
+          )}
+
           <div
-            className="rounded-full p-2 transition-shadow"
+            className="rounded-full p-1.5 transition-shadow"
             style={{
-              boxShadow: `0 0 ${26 + speakerVolume * 45}px ${activePlayer.color}88`,
+              boxShadow: `0 0 ${22 + speakerVolume * 44}px ${activePlayer.color}88`,
             }}
           >
             <CharacterAvatar
               characterId={activePlayer.characterId}
-              size={128}
+              size={108}
               mouthOpen={speakerVolume}
               isSpeaking
             />
           </div>
-          <div className="mt-1 inline-flex items-center gap-2 rounded-full bg-white text-slate-950 px-4 py-1 font-display font-black text-sm sm:text-base shadow-xl">
+          <div className="mt-1 inline-flex items-center gap-2 rounded-full bg-white text-slate-950 px-3.5 py-1 font-display font-black text-xs sm:text-sm shadow-xl">
             <span>{activePlayer.nickname}</span>
-            <span className="text-xs font-extrabold uppercase text-fuchsia-600">В ЭФИРЕ</span>
+            <span className="text-[10px] font-extrabold uppercase text-fuchsia-600">В ЭФИРЕ</span>
           </div>
         </motion.div>
       )}
 
-      {/* Stage Floor Rim */}
-      <div className="h-4 w-full bg-gradient-to-r from-fuchsia-500/30 via-cyan-400/50 to-amber-400/30 border-t border-white/25" />
+      {/* Animated Equalizer Stage Rim */}
+      <div className="relative h-4 w-full bg-gradient-to-r from-fuchsia-500/35 via-cyan-400/55 to-amber-400/35 border-t border-white/25 flex items-end justify-around px-3 overflow-hidden">
+        {Array.from({ length: 16 }).map((_, idx) => (
+          <motion.div
+            key={idx}
+            animate={{
+              height: hasSpotlight
+                ? `${Math.max(20, Math.min(100, 25 + speakerVolume * 80 * ((idx % 3) + 1) * 0.4))}%`
+                : '25%',
+            }}
+            transition={{ duration: 0.08 }}
+            className="w-2 sm:w-3 rounded-t-sm bg-white/45"
+          />
+        ))}
+      </div>
     </motion.div>
   );
 };

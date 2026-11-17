@@ -1,24 +1,23 @@
 export type GamePhase =
   | 'lobby'
-  | 'content_select'
   | 'demonstration'
   | 'recording'
   | 'gallery'
-  | 'scoring'
   | 'round_results'
   | 'game_over';
 
 export type RecordingMode = 'parallel' | 'sequential';
-export type SelectorMode = 'host' | 'rotating' | 'random';
 export type MemeMediaType = 'audio' | 'video';
 
 export type CharacterId =
   | 'fox'
+  | 'cat'
   | 'robot'
   | 'frog'
-  | 'cat'
+  | 'capybara'
   | 'alien'
   | 'panda'
+  | 'cyborg'
   | 'owl'
   | 'dino'
   | 'bear'
@@ -105,9 +104,8 @@ export interface GalleryState {
 
 export interface RoomSettings {
   totalRounds: number;
-  recordingTimeSec: number;
   recordingMode: RecordingMode;
-  selectorMode: SelectorMode;
+  enabledBuiltinMemeIds: string[];
 }
 
 export interface RoomState {
@@ -116,8 +114,8 @@ export interface RoomState {
   settings: RoomSettings;
   players: Player[];
   currentRound: number;
-  selectorPlayerId: string | null;
   selectedMeme: MemeItem | null;
+  usedMemeIds: string[];
   phaseEndsAt: number | null;
   phaseDurationSec: number | null;
   activeTurnPlayerId: string | null;

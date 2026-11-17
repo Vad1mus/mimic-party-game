@@ -15,13 +15,15 @@ import {
 
 export const MAX_PLAYERS = 10;
 
-const CHARACTER_POOL: CharacterId[] = [
+export const CHARACTER_POOL: CharacterId[] = [
   'fox',
+  'cat',
   'robot',
   'frog',
-  'cat',
+  'capybara',
   'alien',
   'panda',
+  'cyborg',
   'owl',
   'dino',
   'bear',
@@ -30,11 +32,13 @@ const CHARACTER_POOL: CharacterId[] = [
 
 const CHARACTER_COLORS: Record<CharacterId, string> = {
   fox: '#f97316',
+  cat: '#ec4899',
   robot: '#06b6d4',
   frog: '#84cc16',
-  cat: '#ec4899',
+  capybara: '#d97706',
   alien: '#10b981',
   panda: '#6366f1',
+  cyborg: '#38bdf8',
   owl: '#3b82f6',
   dino: '#f43f5e',
   bear: '#f59e0b',
@@ -68,20 +72,23 @@ function generateRoomCode(existing: Set<string>): string {
   return `P${Date.now().toString().slice(-4)}`;
 }
 
-function assignUniqueCharacter(existingPlayers: Player[]): CharacterId {
+function pickCharacterForJoin(existingPlayers: Player[], preferred?: CharacterId): CharacterId {
   const used = new Set(existingPlayers.map((p) => p.characterId));
+  if (preferred && CHARACTER_POOL.includes(preferred) && !used.has(preferred)) {
+    return preferred;
+  }
   const available = CHARACTER_POOL.filter((c) => !used.has(c));
   const pool = available.length > 0 ? available : CHARACTER_POOL;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[0];
 }
 
 function pickVerdict(similarity: number, skipped?: boolean, isSilent?: boolean): string {
-  if (skipped) return 'Пропущено (микрофон отдыхает) 🙈';
+  if (skipped) return 'Пропущено (без микрофона) 🙈';
   if (isSilent || similarity <= 5) return 'Режим ниндзя — в микрофоне тишина! 🥷';
-  if (similarity >= 88) return 'Абсолютный Оскар! Копия один в один! 🏆';
+  if (similarity >= 88) return 'Абсолютный Оскар! Один в один! 🏆';
   if (similarity >= 74) return 'Блестящая пародия! Ритм и тон пойманы! 🔥';
   if (similarity >= 58) return 'Очень годно! Отличная энергия! 👏';
-  if (similarity >= 40) return 'Почти попал, но с авторской изюминкой! 😂';
+  if (similarity >= 40) return 'Почти попал, но с авторским акцентом! 😂';
   if (similarity >= 20) return 'Свободная импровизация мимо ритма! 🎭';
   return 'Экспериментальный авангард! 🤪';
 }
@@ -110,7 +117,7 @@ export class RoomManager {
     room.phaseTimer = setTimeout(() => {
       room.phaseTimer = null;
       callback();
-    }, seconds * 1000);
+    }, Math.max(200, seconds * 1000));
   }
 
   private emitRoom(room: InternalRoom): void {
@@ -129,14 +136,14 @@ export class RoomManager {
 
   public createRoom(
     socketId: string,
-    payload: { playerId?: string; nickname: string }
+    payload: { playerId?: string; nickname: string; characterId?: CharacterId }
   ): { ok: true; room: RoomState; playerId: string } | { ok: false; error: string } {
     const nickname = (payload.nickname || '').trim().slice(0, 20);
     if (!nickname) return { ok: false, error: 'Введите никнейм!' };
 
     const code = generateRoomCode(new Set(this.rooms.keys()));
     const playerId = payload.playerId || uuidv4();
-    const characterId = assignUniqueCharacter([]);
+    const characterId = pickCharacterForJoin([], payload.characterId);
 
     const host: Player = {
       id: playerId,
@@ -162,14 +169,13 @@ export class RoomManager {
       phase: 'lobby',
       settings: {
         totalRounds: 3,
-        recordingTimeSec: 12,
         recordingMode: 'parallel',
-        selectorMode: 'host',
+        enabledBuiltinMemeIds: BUILT_IN_MEMES.map((m) => m.id),
       },
       players: [host],
       currentRound: 0,
-      selectorPlayerId: null,
       selectedMeme: null,
+      usedMemeIds: [],
       phaseEndsAt: null,
       phaseDurationSec: null,
       activeTurnPlayerId: null,
@@ -202,7 +208,7 @@ export class RoomManager {
 
   public joinRoom(
     socketId: string,
-    payload: { code: string; playerId?: string; nickname: string }
+    payload: { code: string; playerId?: string; nickname: string; characterId?: CharacterId }
   ): { ok: true; room: RoomState; playerId: string } | { ok: false; error: string } {
     const code = (payload.code || '').trim().toUpperCase();
     const internal = this.rooms.get(code);
@@ -214,7 +220,6 @@ export class RoomManager {
     const nickname = (payload.nickname || '').trim().slice(0, 20);
     if (!nickname) return { ok: false, error: 'Введите никнейм!' };
 
-    // Reconnection by playerId
     if (payload.playerId) {
       const existing = state.players.find((p) => p.id === payload.playerId);
       if (existing) {
@@ -236,7 +241,7 @@ export class RoomManager {
       return { ok: false, error: `Комната заполнена (максимум ${MAX_PLAYERS} игроков).` };
     }
 
-    const characterId = assignUniqueCharacter(state.players);
+    const characterId = pickCharacterForJoin(state.players, payload.characterId);
     const playerId = payload.playerId || uuidv4();
 
     const player: Player = {
@@ -265,6 +270,32 @@ export class RoomManager {
     return { ok: true, room: state, playerId };
   }
 
+  public selectCharacter(
+    socketId: string,
+    characterId: CharacterId
+  ): { ok: boolean; error?: string } {
+    const ctx = this.resolve(socketId);
+    if (!ctx) return { ok: false, error: 'Вы не в комнате.' };
+    if (ctx.internal.state.phase !== 'lobby') {
+      return { ok: false, error: 'Персонажа можно менять только в лобби.' };
+    }
+    if (!CHARACTER_POOL.includes(characterId)) {
+      return { ok: false, error: 'Неизвестный персонаж.' };
+    }
+
+    const takenByOther = ctx.internal.state.players.some(
+      (p) => p.id !== ctx.player.id && p.characterId === characterId
+    );
+    if (takenByOther) {
+      return { ok: false, error: 'Этот персонаж уже занят другим игроком!' };
+    }
+
+    ctx.player.characterId = characterId;
+    ctx.player.color = CHARACTER_COLORS[characterId];
+    this.emitRoom(ctx.internal);
+    return { ok: true };
+  }
+
   private syncRecordingsToSocket(socketId: string, internal: InternalRoom): void {
     if (internal.recordingBuffers.size === 0) return;
     for (const [playerId, entry] of internal.recordingBuffers.entries()) {
@@ -278,6 +309,14 @@ export class RoomManager {
 
   public getSocketSession(socketId: string) {
     return this.socketToRoom.get(socketId);
+  }
+
+  public getTargetSocketInRoom(senderSocketId: string, targetPlayerId: string): { socketId: string; fromPlayerId: string } | null {
+    const ctx = this.resolve(senderSocketId);
+    if (!ctx) return null;
+    const target = ctx.internal.state.players.find((p) => p.id === targetPlayerId && p.connected);
+    if (!target) return null;
+    return { socketId: target.socketId, fromPlayerId: ctx.player.id };
   }
 
   public handleDisconnect(socketId: string): void {
@@ -371,72 +410,35 @@ export class RoomManager {
     if (typeof partial.totalRounds === 'number') {
       s.totalRounds = Math.max(1, Math.min(10, Math.round(partial.totalRounds)));
     }
-    if (typeof partial.recordingTimeSec === 'number') {
-      s.recordingTimeSec = Math.max(5, Math.min(20, Math.round(partial.recordingTimeSec)));
-    }
     if (partial.recordingMode === 'parallel' || partial.recordingMode === 'sequential') {
       s.recordingMode = partial.recordingMode;
     }
-    if (partial.selectorMode === 'host' || partial.selectorMode === 'rotating' || partial.selectorMode === 'random') {
-      s.selectorMode = partial.selectorMode;
+    if (Array.isArray(partial.enabledBuiltinMemeIds)) {
+      const validIds = new Set(BUILT_IN_MEMES.map((m) => m.id));
+      const filtered = partial.enabledBuiltinMemeIds.filter((id) => validIds.has(id));
+      if (filtered.length > 0 || ctx.internal.state.customMemes.length > 0) {
+        s.enabledBuiltinMemeIds = filtered;
+      }
     }
     this.emitRoom(ctx.internal);
   }
 
-  public startGame(socketId: string): void {
+  public togglePackMeme(socketId: string, memeId: string): void {
     const ctx = this.resolve(socketId);
-    if (!ctx || !ctx.player.isHost) return;
-    const state = ctx.internal.state;
-    if (state.phase !== 'lobby') return;
-
-    for (const p of state.players) {
-      p.score = 0;
-      p.lastRoundDelta = 0;
-      p.stats = {
-        totalSimilarity: 0,
-        roundsRecorded: 0,
-        totalReactionsReceived: 0,
-        bestSimilarity: 0,
-      };
+    if (!ctx || !ctx.player.isHost || ctx.internal.state.phase !== 'lobby') return;
+    const s = ctx.internal.state.settings;
+    const exists = s.enabledBuiltinMemeIds.includes(memeId);
+    if (exists) {
+      // Never allow completely empty meme pack
+      const remainingBuiltin = s.enabledBuiltinMemeIds.filter((id) => id !== memeId);
+      if (remainingBuiltin.length === 0 && ctx.internal.state.customMemes.length === 0) {
+        return;
+      }
+      s.enabledBuiltinMemeIds = remainingBuiltin;
+    } else if (BUILT_IN_MEMES.some((m) => m.id === memeId)) {
+      s.enabledBuiltinMemeIds = [...s.enabledBuiltinMemeIds, memeId];
     }
-    state.currentRound = 1;
-    this.enterContentSelect(ctx.internal);
-  }
-
-  private enterContentSelect(internal: InternalRoom): void {
-    const state = internal.state;
-    // Auto-cleanup RAM recording buffers from previous round!
-    internal.recordingBuffers.clear();
-    this.io.to(state.code).emit('clear_round_audio');
-
-    state.phase = 'content_select';
-    state.selectedMeme = null;
-    state.recordings = {};
-    state.scores = {};
-    state.activeTurnPlayerId = null;
-    state.turnQueue = [];
-    internal.reactionsByTarget = {};
-
-    const connectedPlayers = state.players.filter((p) => p.connected);
-    const pool = connectedPlayers.length > 0 ? connectedPlayers : state.players;
-    const host = pool.find((p) => p.isHost) || pool[0];
-
-    if (state.settings.selectorMode === 'host') {
-      state.selectorPlayerId = host?.id || null;
-    } else if (state.settings.selectorMode === 'rotating') {
-      const idx = (state.currentRound - 1) % pool.length;
-      state.selectorPlayerId = pool[idx]?.id || host?.id || null;
-    } else {
-      state.selectorPlayerId = pool[Math.floor(Math.random() * pool.length)]?.id || host?.id || null;
-    }
-
-    this.schedulePhaseTimer(internal, 60, () => {
-      const allMemes = [...state.customMemes, ...BUILT_IN_MEMES];
-      const randomMeme = allMemes[Math.floor(Math.random() * allMemes.length)];
-      this.applySelectedMeme(internal, randomMeme);
-    });
-
-    this.emitRoom(internal);
+    this.emitRoom(ctx.internal);
   }
 
   public addCustomMemeInRam(
@@ -477,7 +479,7 @@ export class RoomManager {
       url: `/api/ram-meme/${code}/${memeId}`,
       emoji: payload.emoji || (payload.type === 'video' ? '🎬' : '🎵'),
       category: 'Свой пак',
-      duration: Math.min(15, Math.max(1, Number(payload.duration) || 6)),
+      duration: Math.min(15, Math.max(1.2, Number(payload.duration) || 5)),
       isCustom: true,
       uploadedBy: ctx.player.nickname,
       accentColor: ctx.player.color,
@@ -491,42 +493,76 @@ export class RoomManager {
   public removeCustomMeme(socketId: string, memeId: string): void {
     const ctx = this.resolve(socketId);
     if (!ctx || !ctx.player.isHost) return;
+    const state = ctx.internal.state;
+    const nextCustom = state.customMemes.filter((m) => m.id !== memeId);
+    if (nextCustom.length === 0 && state.settings.enabledBuiltinMemeIds.length === 0) {
+      state.settings.enabledBuiltinMemeIds = [BUILT_IN_MEMES[0].id];
+    }
     ctx.internal.customMemeBuffers.delete(memeId);
-    ctx.internal.state.customMemes = ctx.internal.state.customMemes.filter((m) => m.id !== memeId);
+    state.customMemes = nextCustom;
     this.emitRoom(ctx.internal);
   }
 
-  public selectMeme(socketId: string, memeId: string): void {
+  public startGame(socketId: string): void {
     const ctx = this.resolve(socketId);
-    if (!ctx) return;
+    if (!ctx || !ctx.player.isHost) return;
     const state = ctx.internal.state;
-    if (state.phase !== 'content_select') return;
-    if (!ctx.player.isHost && ctx.player.id !== state.selectorPlayerId) return;
+    if (state.phase !== 'lobby') return;
 
-    const allMemes = [...state.customMemes, ...BUILT_IN_MEMES];
-    const meme = allMemes.find((m) => m.id === memeId);
-    if (!meme) return;
-
-    this.applySelectedMeme(ctx.internal, meme);
+    for (const p of state.players) {
+      p.score = 0;
+      p.lastRoundDelta = 0;
+      p.stats = {
+        totalSimilarity: 0,
+        roundsRecorded: 0,
+        totalReactionsReceived: 0,
+        bestSimilarity: 0,
+      };
+    }
+    state.currentRound = 1;
+    state.usedMemeIds = [];
+    this.startAutomatedRound(ctx.internal);
   }
 
-  private applySelectedMeme(internal: InternalRoom, meme: MemeItem): void {
-    internal.state.selectedMeme = meme;
-    internal.state.phase = 'demonstration';
+  /**
+   * Automatically picks an unused meme from the room's pack without repeats
+   * and starts Demonstration -> Recording -> Gallery -> 6s Results -> Next Round / Podium.
+   */
+  private startAutomatedRound(internal: InternalRoom): void {
+    const state = internal.state;
+    internal.recordingBuffers.clear();
+    this.io.to(state.code).emit('clear_round_audio');
 
-    const demoSec = Math.min(20, Math.max(8, Math.ceil((meme.duration || 5) + 5)));
+    state.recordings = {};
+    state.scores = {};
+    state.activeTurnPlayerId = null;
+    state.turnQueue = [];
+    internal.reactionsByTarget = {};
+
+    const enabledBuiltins = BUILT_IN_MEMES.filter((m) =>
+      state.settings.enabledBuiltinMemeIds.includes(m.id)
+    );
+    const activePack = [...state.customMemes, ...enabledBuiltins];
+    const packPool = activePack.length > 0 ? activePack : BUILT_IN_MEMES;
+
+    let unused = packPool.filter((m) => !state.usedMemeIds.includes(m.id));
+    if (unused.length === 0) {
+      // Only recycle once every single meme in the pack has been played
+      state.usedMemeIds = [];
+      unused = packPool;
+    }
+
+    const chosen = unused[Math.floor(Math.random() * unused.length)];
+    state.usedMemeIds.push(chosen.id);
+    state.selectedMeme = chosen;
+    state.phase = 'demonstration';
+
+    const demoSec = Math.max(4, Math.ceil(chosen.duration) + 2);
     this.schedulePhaseTimer(internal, demoSec, () => {
       this.enterRecording(internal);
     });
 
     this.emitRoom(internal);
-  }
-
-  public advanceFromDemo(socketId: string): void {
-    const ctx = this.resolve(socketId);
-    if (!ctx || !ctx.player.isHost) return;
-    if (ctx.internal.state.phase !== 'demonstration') return;
-    this.enterRecording(ctx.internal);
   }
 
   private enterRecording(internal: InternalRoom): void {
@@ -535,23 +571,27 @@ export class RoomManager {
     state.recordings = {};
     internal.recordingBuffers.clear();
 
+    const memeDur = state.selectedMeme?.duration || 4;
+    // 2.2s countdown (3-2-1-ГОВОРИ) + exact meme.duration + 3.2s network/decode grace
+    const totalWindowSec = Math.ceil(2.2 + memeDur + 3.2);
+
     const activePlayers = state.players.filter((p) => p.connected);
     const participants = activePlayers.length > 0 ? activePlayers : state.players;
 
     if (state.settings.recordingMode === 'sequential') {
       state.turnQueue = participants.map((p) => p.id);
-      this.startNextSequentialTurn(internal);
+      this.startNextSequentialTurn(internal, totalWindowSec);
     } else {
       state.turnQueue = [];
       state.activeTurnPlayerId = null;
-      this.schedulePhaseTimer(internal, state.settings.recordingTimeSec + 4, () => {
+      this.schedulePhaseTimer(internal, totalWindowSec, () => {
         this.enterGallery(internal);
       });
       this.emitRoom(internal);
     }
   }
 
-  private startNextSequentialTurn(internal: InternalRoom): void {
+  private startNextSequentialTurn(internal: InternalRoom, turnSec: number): void {
     const state = internal.state;
     const nextId = state.turnQueue.shift() || null;
     if (!nextId) {
@@ -561,7 +601,7 @@ export class RoomManager {
     }
 
     state.activeTurnPlayerId = nextId;
-    this.schedulePhaseTimer(internal, state.settings.recordingTimeSec + 4, () => {
+    this.schedulePhaseTimer(internal, turnSec, () => {
       if (!state.recordings[nextId]) {
         state.recordings[nextId] = {
           playerId: nextId,
@@ -579,7 +619,7 @@ export class RoomManager {
           },
         };
       }
-      this.startNextSequentialTurn(internal);
+      this.startNextSequentialTurn(internal, turnSec);
     });
 
     this.emitRoom(internal);
@@ -602,7 +642,6 @@ export class RoomManager {
     const playerId = ctx.player.id;
     const mimeType = payload.mimeType || 'audio/webm;codecs=opus';
 
-    // Store compressed audio in RAM and broadcast directly to all room peers over Socket.io
     ctx.internal.recordingBuffers.set(playerId, {
       buffer: payload.buffer,
       mimeType,
@@ -666,11 +705,13 @@ export class RoomManager {
     if (state.settings.recordingMode === 'sequential') {
       if (state.activeTurnPlayerId === playerId) {
         this.clearTimers(internal);
+        const memeDur = state.selectedMeme?.duration || 4;
+        const turnSec = Math.ceil(2.2 + memeDur + 3.2);
         setTimeout(() => {
           if (state.phase === 'recording') {
-            this.startNextSequentialTurn(internal);
+            this.startNextSequentialTurn(internal, turnSec);
           }
-        }, 500);
+        }, 450);
       }
     } else {
       const expected = state.players.filter((p) => p.connected);
@@ -681,16 +722,9 @@ export class RoomManager {
           if (state.phase === 'recording') {
             this.enterGallery(internal);
           }
-        }, 650);
+        }, 550);
       }
     }
-  }
-
-  public forceFinishRecording(socketId: string): void {
-    const ctx = this.resolve(socketId);
-    if (!ctx || !ctx.player.isHost) return;
-    if (ctx.internal.state.phase !== 'recording') return;
-    this.enterGallery(ctx.internal);
   }
 
   private enterGallery(internal: InternalRoom): void {
@@ -731,14 +765,14 @@ export class RoomManager {
     const currentItem = state.gallery.items[state.gallery.stepIndex];
     if (!currentItem) return;
 
-    let clipDuration = 5;
+    let clipDuration = 4;
     if (currentItem.kind === 'original') {
-      clipDuration = state.selectedMeme?.duration || 5;
+      clipDuration = state.selectedMeme?.duration || 4;
     } else {
       clipDuration = state.recordings[currentItem.playerId]?.duration || 4;
     }
 
-    const waitMs = Math.min(20000, Math.max(4500, Math.ceil((clipDuration + 3.0) * 1000)));
+    const waitMs = Math.min(20000, Math.max(3200, Math.ceil((clipDuration + 1.8) * 1000)));
     internal.galleryAutoTimer = setTimeout(() => {
       if (state.phase === 'gallery') {
         this.advanceGalleryStep(internal, 1);
@@ -746,28 +780,11 @@ export class RoomManager {
     }, waitMs);
   }
 
-  public galleryNavigate(socketId: string, action: 'next' | 'prev' | 'replay' | 'ended'): void {
+  public galleryClipEnded(socketId: string): void {
     const ctx = this.resolve(socketId);
     if (!ctx || !ctx.player.isHost) return;
-    const state = ctx.internal.state;
-    if (state.phase !== 'gallery') return;
-
-    if (action === 'replay') {
-      state.gallery.isPlaying = true;
-      state.gallery.playToken = Date.now();
-      this.emitRoom(ctx.internal);
-      this.scheduleGalleryAutoAdvance(ctx.internal);
-      return;
-    }
-
-    if (action === 'prev') {
-      this.advanceGalleryStep(ctx.internal, -1);
-      return;
-    }
-
-    if (action === 'next' || action === 'ended') {
-      this.advanceGalleryStep(ctx.internal, 1);
-    }
+    if (ctx.internal.state.phase !== 'gallery') return;
+    this.advanceGalleryStep(ctx.internal, 1);
   }
 
   private advanceGalleryStep(internal: InternalRoom, delta: number): void {
@@ -778,21 +795,12 @@ export class RoomManager {
     const g = internal.state.gallery;
     const nextIdx = g.stepIndex + delta;
 
-    if (nextIdx < 0) {
-      g.stepIndex = 0;
-      g.isPlaying = true;
-      g.playToken = Date.now();
-      this.emitRoom(internal);
-      this.scheduleGalleryAutoAdvance(internal);
-      return;
-    }
-
     if (nextIdx >= g.items.length) {
-      this.enterScoring(internal);
+      this.computeAndEnterRoundResults(internal);
       return;
     }
 
-    g.stepIndex = nextIdx;
+    g.stepIndex = Math.max(0, nextIdx);
     g.isPlaying = true;
     g.playToken = Date.now();
     this.emitRoom(internal);
@@ -806,7 +814,7 @@ export class RoomManager {
     const ctx = this.resolve(socketId);
     if (!ctx) return;
     const state = ctx.internal.state;
-    if (state.phase !== 'gallery' && state.phase !== 'scoring') return;
+    if (state.phase !== 'gallery' && state.phase !== 'round_results') return;
 
     const emoji = (payload.emoji || '🔥').slice(0, 8);
     const targetId = payload.targetPlayerId;
@@ -831,11 +839,9 @@ export class RoomManager {
     this.io.to(state.code).emit('reaction_burst', event);
   }
 
-  private enterScoring(internal: InternalRoom): void {
+  private computeAndEnterRoundResults(internal: InternalRoom): void {
     this.clearTimers(internal);
     const state = internal.state;
-    state.phase = 'scoring';
-
     const computed: RecordingScore[] = [];
 
     for (const player of state.players) {
@@ -906,50 +912,26 @@ export class RoomManager {
     }
 
     state.scores = scoreMap;
+    state.phase = 'round_results';
 
-    this.schedulePhaseTimer(internal, 18, () => {
-      this.enterRoundResults(internal);
+    // Free RAM audio buffers right after gallery finishes!
+    internal.recordingBuffers.clear();
+    this.io.to(state.code).emit('clear_round_audio');
+
+    // Auto-advance after 6 seconds to next round OR final podium!
+    this.schedulePhaseTimer(internal, 6, () => {
+      if (state.currentRound < state.settings.totalRounds) {
+        state.currentRound += 1;
+        this.startAutomatedRound(internal);
+      } else {
+        state.phase = 'game_over';
+        state.phaseEndsAt = null;
+        state.phaseDurationSec = null;
+        this.emitRoom(internal);
+      }
     });
 
     this.emitRoom(internal);
-  }
-
-  public advanceToResults(socketId: string): void {
-    const ctx = this.resolve(socketId);
-    if (!ctx || !ctx.player.isHost) return;
-    if (ctx.internal.state.phase !== 'scoring') return;
-    this.enterRoundResults(ctx.internal);
-  }
-
-  private enterRoundResults(internal: InternalRoom): void {
-    this.clearTimers(internal);
-    const state = internal.state;
-    state.phase = 'round_results';
-    state.phaseEndsAt = null;
-    state.phaseDurationSec = null;
-    // Free RAM buffers right after scoring/gallery ends!
-    internal.recordingBuffers.clear();
-    this.io.to(state.code).emit('clear_round_audio');
-    this.emitRoom(internal);
-  }
-
-  public nextRound(socketId: string): void {
-    const ctx = this.resolve(socketId);
-    if (!ctx || !ctx.player.isHost) return;
-    const state = ctx.internal.state;
-    if (state.phase !== 'round_results' && state.phase !== 'scoring') return;
-
-    if (state.currentRound < state.settings.totalRounds) {
-      state.currentRound += 1;
-      this.enterContentSelect(ctx.internal);
-    } else {
-      this.clearTimers(ctx.internal);
-      internalCleanup(ctx.internal, this.io);
-      state.phase = 'game_over';
-      state.phaseEndsAt = null;
-      state.phaseDurationSec = null;
-      this.emitRoom(ctx.internal);
-    }
   }
 
   public playAgain(socketId: string): void {
@@ -958,12 +940,13 @@ export class RoomManager {
     const state = ctx.internal.state;
 
     this.clearTimers(ctx.internal);
-    internalCleanup(ctx.internal, this.io);
+    ctx.internal.recordingBuffers.clear();
+    this.io.to(state.code).emit('clear_round_audio');
 
     state.phase = 'lobby';
     state.currentRound = 0;
     state.selectedMeme = null;
-    state.selectorPlayerId = null;
+    state.usedMemeIds = [];
     state.recordings = {};
     state.scores = {};
     state.phaseEndsAt = null;
@@ -995,9 +978,4 @@ export class RoomManager {
     if (!player) return null;
     return { internal, player };
   }
-}
-
-function internalCleanup(internal: InternalRoom, io: Server): void {
-  internal.recordingBuffers.clear();
-  io.to(internal.state.code).emit('clear_round_audio');
 }

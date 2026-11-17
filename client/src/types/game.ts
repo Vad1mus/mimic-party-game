@@ -1,24 +1,23 @@
 export type GamePhase =
   | 'lobby'
-  | 'content_select'
   | 'demonstration'
   | 'recording'
   | 'gallery'
-  | 'scoring'
   | 'round_results'
   | 'game_over';
 
 export type RecordingMode = 'parallel' | 'sequential';
-export type SelectorMode = 'host' | 'rotating' | 'random';
 export type MemeMediaType = 'audio' | 'video';
 
 export type CharacterId =
   | 'fox'
+  | 'cat'
   | 'robot'
   | 'frog'
-  | 'cat'
+  | 'capybara'
   | 'alien'
   | 'panda'
+  | 'cyborg'
   | 'owl'
   | 'dino'
   | 'bear'
@@ -31,18 +30,24 @@ export interface CharacterMeta {
   secondary: string;
 }
 
-export const CHARACTER_CATALOG: Record<CharacterId, CharacterMeta> = {
-  fox: { id: 'fox', name: 'Хитрый Лис', primary: '#fb923c', secondary: '#ea580c' },
-  robot: { id: 'robot', name: 'Кибер-Бот', primary: '#22d3ee', secondary: '#0284c7' },
-  frog: { id: 'frog', name: 'Диско-Жаба', primary: '#a3e635', secondary: '#4d7c0f' },
-  cat: { id: 'cat', name: 'Оперный Кот', primary: '#f472b6', secondary: '#be185d' },
-  alien: { id: 'alien', name: 'Марсианин', primary: '#34d399', secondary: '#047857' },
-  panda: { id: 'panda', name: 'Панда-Рок', primary: '#818cf8', secondary: '#4338ca' },
-  owl: { id: 'owl', name: 'Ночная Сова', primary: '#60a5fa', secondary: '#1d4ed8' },
-  dino: { id: 'dino', name: 'Рекс-Дино', primary: '#fb7185', secondary: '#be123c' },
-  bear: { id: 'bear', name: 'Гризли-DJ', primary: '#fbbf24', secondary: '#b45309' },
-  octopus: { id: 'octopus', name: 'Осьминог', primary: '#e879f9', secondary: '#a21caf' },
-};
+export const CHARACTER_LIST: CharacterMeta[] = [
+  { id: 'fox', name: 'Лис', primary: '#fb923c', secondary: '#ea580c' },
+  { id: 'cat', name: 'Кот', primary: '#f472b6', secondary: '#be185d' },
+  { id: 'robot', name: 'Робот', primary: '#22d3ee', secondary: '#0284c7' },
+  { id: 'frog', name: 'Жаба', primary: '#a3e635', secondary: '#4d7c0f' },
+  { id: 'capybara', name: 'Капибара', primary: '#d97706', secondary: '#92400e' },
+  { id: 'alien', name: 'Пришелец', primary: '#34d399', secondary: '#047857' },
+  { id: 'panda', name: 'Панда', primary: '#818cf8', secondary: '#4338ca' },
+  { id: 'cyborg', name: 'Киборг', primary: '#38bdf8', secondary: '#0369a1' },
+  { id: 'owl', name: 'Сова', primary: '#60a5fa', secondary: '#1d4ed8' },
+  { id: 'dino', name: 'Дино', primary: '#fb7185', secondary: '#be123c' },
+  { id: 'bear', name: 'Медведь', primary: '#fbbf24', secondary: '#b45309' },
+  { id: 'octopus', name: 'Осьминог', primary: '#e879f9', secondary: '#a21caf' },
+];
+
+export const CHARACTER_CATALOG: Record<CharacterId, CharacterMeta> = Object.fromEntries(
+  CHARACTER_LIST.map((c) => [c.id, c])
+) as Record<CharacterId, CharacterMeta>;
 
 export interface MemeItem {
   id: string;
@@ -125,9 +130,8 @@ export interface GalleryState {
 
 export interface RoomSettings {
   totalRounds: number;
-  recordingTimeSec: number;
   recordingMode: RecordingMode;
-  selectorMode: SelectorMode;
+  enabledBuiltinMemeIds: string[];
 }
 
 export interface RoomState {
@@ -136,8 +140,8 @@ export interface RoomState {
   settings: RoomSettings;
   players: Player[];
   currentRound: number;
-  selectorPlayerId: string | null;
   selectedMeme: MemeItem | null;
+  usedMemeIds: string[];
   phaseEndsAt: number | null;
   phaseDurationSec: number | null;
   activeTurnPlayerId: string | null;

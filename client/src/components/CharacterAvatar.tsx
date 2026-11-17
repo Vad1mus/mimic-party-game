@@ -351,7 +351,6 @@ function renderCharacterSvg(
       );
 
     case 'octopus':
-    default:
       return (
         <g>
           {/* Tentacle base */}
@@ -364,6 +363,47 @@ function renderCharacterSvg(
           <ellipse cx="46" cy="34" rx="10" ry="6" transform="rotate(-20 46 34)" fill="#fae8ff" opacity="0.5" />
           <Eyes blink={blink} y={55} eyeColor="#3b0764" />
           <Mouth y={79} jawHeight={jawHeight} openRatio={openRatio} fill="#4a044e" tongue="#f472b6" />
+        </g>
+      );
+
+    case 'capybara':
+      return (
+        <g>
+          {/* Little round ears */}
+          <ellipse cx="26" cy="40" rx="8" ry="10" transform="rotate(-20 26 40)" fill="#92400e" stroke="#451a03" strokeWidth="2.4" />
+          <ellipse cx="94" cy="40" rx="8" ry="10" transform="rotate(20 94 40)" fill="#92400e" stroke="#451a03" strokeWidth="2.4" />
+          {/* Chill block-ish low-poly capybara head */}
+          <polygon points="30,32 90,32 98,64 88,98 32,98 22,64" fill="#d97706" stroke="#451a03" strokeWidth="2.6" strokeLinejoin="round" />
+          <polygon points="30,32 90,32 60,52" fill="#f59e0b" opacity="0.45" />
+          {/* Snout */}
+          <ellipse cx="60" cy="70" rx="26" ry="18" fill="#b45309" />
+          <ellipse cx="52" cy="64" rx="3.2" ry="2.2" fill="#451a03" />
+          <ellipse cx="68" cy="64" rx="3.2" ry="2.2" fill="#451a03" />
+          {/* Iconic tangerine on head */}
+          <circle cx="60" cy="21" r="11" fill="#fb923c" stroke="#7c2d12" strokeWidth="2" />
+          <ellipse cx="64" cy="10" rx="5" ry="3" transform="rotate(-20 64 10)" fill="#4ade80" stroke="#14532d" strokeWidth="1.2" />
+          <Eyes blink={blink} leftX={40} rightX={80} y={50} eyeColor="#291509" />
+          <Mouth y={83} jawHeight={jawHeight} openRatio={openRatio} fill="#451a03" tongue="#fb7185" />
+        </g>
+      );
+
+    case 'cyborg':
+    default:
+      return (
+        <g>
+          {/* Cyber side fins */}
+          <polygon points="16,44 26,36 26,76 16,68" fill="#0284c7" stroke="#082f49" strokeWidth="2" />
+          <polygon points="104,44 94,36 94,76 104,68" fill="#0284c7" stroke="#082f49" strokeWidth="2" />
+          {/* Chrome-blue head */}
+          <polygon points="60,20 94,36 94,82 60,104 26,82 26,36" fill="#cbd5e1" stroke="#0f172a" strokeWidth="2.8" strokeLinejoin="round" />
+          {/* Cyber half-plate */}
+          <polygon points="60,20 94,36 94,82 60,104" fill="#38bdf8" opacity="0.55" />
+          {/* Laser Visor strip */}
+          <rect x="30" y="44" width="60" height="20" rx="8" fill="#0f172a" stroke="#0284c7" strokeWidth="2" />
+          {!blink && (
+            <rect x="38" y="51" width="44" height="6" rx="3" fill={openRatio > 0.35 ? '#f43f5e' : '#22d3ee'} />
+          )}
+          <Mouth y={82} jawHeight={jawHeight} openRatio={openRatio} fill="#0f172a" tongue="#38bdf8" />
         </g>
       );
   }

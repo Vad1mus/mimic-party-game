@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html,
   body {
     background: radial-gradient(circle at 15% 15%, #3b1369 0%, #170d38 45%, #0c0720 100%);
-    min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
   }
 }
