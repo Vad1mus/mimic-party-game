@@ -18,7 +18,7 @@ export const CharacterPicker: React.FC<CharacterPickerProps> = ({
   myPlayerId,
 }) => {
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+    <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
       {CHARACTER_LIST.map((char) => {
         const owner = players.find((p) => p.characterId === char.id);
         const isTakenByOther = Boolean(owner && owner.id !== myPlayerId);

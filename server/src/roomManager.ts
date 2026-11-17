@@ -28,6 +28,8 @@ export const CHARACTER_POOL: CharacterId[] = [
   'dino',
   'bear',
   'octopus',
+  'shrek',
+  'ershik',
 ];
 
 const CHARACTER_COLORS: Record<CharacterId, string> = {
@@ -43,6 +45,8 @@ const CHARACTER_COLORS: Record<CharacterId, string> = {
   dino: '#f43f5e',
   bear: '#f59e0b',
   octopus: '#d946ef',
+  shrek: '#65a30d',
+  ershik: '#22d3ee',
 };
 
 export interface RamMediaEntry {
@@ -572,8 +576,8 @@ export class RoomManager {
     internal.recordingBuffers.clear();
 
     const memeDur = state.selectedMeme?.duration || 4;
-    // 2.2s countdown (3-2-1-ГОВОРИ) + exact meme.duration + 3.2s network/decode grace
-    const totalWindowSec = Math.ceil(2.2 + memeDur + 3.2);
+    // 2.2s countdown (3-2-1-ГОВОРИ) + exact meme.duration + 4.5s decode/upload grace
+    const totalWindowSec = Math.ceil(2.2 + memeDur + 4.5);
 
     const activePlayers = state.players.filter((p) => p.connected);
     const participants = activePlayers.length > 0 ? activePlayers : state.players;
@@ -706,7 +710,7 @@ export class RoomManager {
       if (state.activeTurnPlayerId === playerId) {
         this.clearTimers(internal);
         const memeDur = state.selectedMeme?.duration || 4;
-        const turnSec = Math.ceil(2.2 + memeDur + 3.2);
+        const turnSec = Math.ceil(2.2 + memeDur + 4.5);
         setTimeout(() => {
           if (state.phase === 'recording') {
             this.startNextSequentialTurn(internal, turnSec);
@@ -730,18 +734,25 @@ export class RoomManager {
   private enterGallery(internal: InternalRoom): void {
     this.clearTimers(internal);
     const state = internal.state;
-    state.phase = 'gallery';
-    state.phaseEndsAt = null;
-    state.phaseDurationSec = null;
-    state.activeTurnPlayerId = null;
 
-    const items: RoomState['gallery']['items'] = [{ kind: 'original' }];
+    const items: RoomState['gallery']['items'] = [];
     for (const p of state.players) {
       const rec = state.recordings[p.id];
       if (rec && !rec.skipped && internal.recordingBuffers.has(p.id)) {
         items.push({ kind: 'player', playerId: p.id });
       }
     }
+
+    // If nobody recorded anything, go straight to round results
+    if (items.length === 0) {
+      this.computeAndEnterRoundResults(internal);
+      return;
+    }
+
+    state.phase = 'gallery';
+    state.phaseEndsAt = null;
+    state.phaseDurationSec = null;
+    state.activeTurnPlayerId = null;
 
     state.gallery = {
       stepIndex: 0,

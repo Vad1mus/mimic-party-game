@@ -4,6 +4,7 @@ import { Mic, Sparkles, Users, ArrowRight, PlusCircle, LogIn } from 'lucide-reac
 import { CharacterId } from '../types/game';
 import { CharacterPicker } from './CharacterPicker';
 import { useMediaStream } from '../contexts/MediaStreamContext';
+import { FriendsMobileStrip } from './FriendsMemoryBackdrop';
 import { soundFx } from '../utils/soundFx';
 
 interface HomeScreenProps {
@@ -61,19 +62,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         animate={{ opacity: 1, y: 0 }}
         className="mb-5 text-center"
       >
-        <div className="mb-2.5 inline-flex items-center gap-2 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 px-3.5 py-1 text-xs font-bold text-fuchsia-200 shadow">
+        <div className="mb-2.5 inline-flex items-center gap-2 rounded-full bg-amber-400/20 border border-amber-300/45 px-3.5 py-1 text-xs font-bold text-amber-200 shadow">
           <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-          <span>Онлайн пати-шоу • До 10 друзей</span>
+          <span>Лучшие бибизянки в сборе🐒</span>
         </div>
 
         <h1 className="font-display text-3xl sm:text-5xl font-black tracking-tight text-white drop-shadow-[0_6px_24px_rgba(236,72,153,0.45)]">
-          MIMIC{' '}
+          ЖЕКБОКС{' '}
           <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent">
-            VOICE PARTY
+            ОДЕССА EDITION
           </span>
         </h1>
         <p className="mt-1.5 max-w-md mx-auto text-xs sm:text-sm text-white/75 font-semibold">
-          Выбери героя, повторяй мемы по волне оригинала и общайся в голосовом чате между раундами!
+          Выбирай героя, озвучивай мемы в реальном времени и угарай с друзьями в голосовом чате!
         </p>
       </motion.div>
 
@@ -211,6 +212,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </form>
       </motion.div>
+
+      <FriendsMobileStrip />
     </div>
   );
 };

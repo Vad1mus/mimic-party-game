@@ -21,7 +21,9 @@ export type CharacterId =
   | 'owl'
   | 'dino'
   | 'bear'
-  | 'octopus';
+  | 'octopus'
+  | 'shrek'
+  | 'ershik';
 
 export interface MemeItem {
   id: string;

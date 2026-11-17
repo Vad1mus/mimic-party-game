@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Sparkles, Play } from 'lucide-react';
-import { Player, REACTION_EMOJIS, RoomState } from '../types/game';
+import { Player, REACTION_EMOJIS, ReactionEvent, RoomState } from '../types/game';
 import { LocalRecordingMedia } from '../hooks/useSocket';
 import { useStageAudioPlayer } from '../hooks/useStageAudioPlayer';
 import { ConcertStage } from './ConcertStage';
-import { resolveMediaUrl } from '../utils/serverUrl';
 import { soundFx } from '../utils/soundFx';
 
 interface GalleryPhaseProps {
   room: RoomState;
   me: Player;
+  reactions: ReactionEvent[];
   recordingMedia: Record<string, LocalRecordingMedia>;
   onClipEnded: () => void;
   onSendReaction: (emoji: string, targetPlayerId: string | null) => void;
@@ -18,6 +18,7 @@ interface GalleryPhaseProps {
 export const GalleryPhase: React.FC<GalleryPhaseProps> = ({
   room,
   me,
+  reactions,
   recordingMedia,
   onClipEnded,
   onSendReaction,
@@ -50,17 +51,13 @@ export const GalleryPhase: React.FC<GalleryPhaseProps> = ({
 
   const startCurrentClip = useCallback(() => {
     if (endedTimerRef.current) clearTimeout(endedTimerRef.current);
-    if (!currentItem) return;
+    if (!currentItem || currentItem.kind !== 'player') return;
 
-    if (currentItem.kind === 'original' && selectedMeme?.url) {
-      playSource(resolveMediaUrl(selectedMeme.url));
-    } else if (currentItem.kind === 'player') {
-      const media = recordingMedia[currentItem.playerId];
-      if (media?.blob) {
-        playSource(media.blob);
-      }
+    const media = recordingMedia[currentItem.playerId];
+    if (media?.blob) {
+      playSource(media.blob);
     }
-  }, [currentItem, selectedMeme?.url, recordingMedia, playSource]);
+  }, [currentItem, recordingMedia, playSource]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -76,12 +73,10 @@ export const GalleryPhase: React.FC<GalleryPhaseProps> = ({
         <div className="min-w-0">
           <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Галерея славы • Раунд {room.currentRound}</span>
+            <span>Выступления на сцене • Раунд {room.currentRound}</span>
           </div>
           <h2 className="font-display text-lg sm:text-2xl font-black text-white truncate">
-            {currentItem?.kind === 'original'
-              ? 'Слушаем оригинал!'
-              : `На сцене: ${currentPlayer?.nickname || 'Артист'}!`}
+            Выступает {currentPlayer?.nickname || 'Артист'}!
           </h2>
         </div>
 
@@ -107,20 +102,20 @@ export const GalleryPhase: React.FC<GalleryPhaseProps> = ({
                   : 'bg-white/5 border-white/10 text-white/45'
               }`}
             >
-              <span>{item.kind === 'original' ? '🎬 Оригинал' : p?.nickname}</span>
+              <span>{p?.nickname || 'Игрок'}</span>
             </div>
           );
         })}
       </div>
 
-      {/* Interactive Concert Stage */}
+      {/* Interactive Concert Stage with Close-Up Performer & Animated Audience */}
       <ConcertStage
         players={room.players}
         activePlayerId={currentPlayer?.id || null}
-        isOriginalActive={currentItem?.kind === 'original'}
         speakerVolume={volume}
         meme={selectedMeme}
         myPlayerId={me.id}
+        reactions={reactions}
       />
 
       {needsClick && (
@@ -139,7 +134,7 @@ export const GalleryPhase: React.FC<GalleryPhaseProps> = ({
       {/* Reactions Bar */}
       <div className="party-card rounded-3xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5">
         <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-          Реакции зала (+бонус к баллам):
+          Реакция зала (+бонус к баллам):
         </span>
         <div className="flex flex-wrap items-center justify-center gap-2">
           {REACTION_EMOJIS.map((emoji) => (

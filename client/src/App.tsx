@@ -13,6 +13,7 @@ import { RoundResultsScreen } from './components/RoundResultsScreen';
 import { GameOverScreen } from './components/GameOverScreen';
 import { FloatingReactions } from './components/FloatingReactions';
 import { VoiceChatBar } from './components/VoiceChatBar';
+import { FriendsMemoryBackdrop } from './components/FriendsMemoryBackdrop';
 import { soundFx } from './utils/soundFx';
 
 function GameShell() {
@@ -63,6 +64,10 @@ function GameShell() {
           <div className="absolute -bottom-24 left-1/3 h-80 w-80 sm:h-96 sm:w-96 rounded-full bg-amber-500/15 blur-[120px]" />
         </div>
 
+        {(!room || room.phase === 'lobby' || room.phase === 'game_over') && (
+          <FriendsMemoryBackdrop subtle={Boolean(room)} />
+        )}
+
         <FloatingReactions reactions={reactions} />
 
         {/* Mobile-First Top Bar inside active room */}
@@ -70,8 +75,8 @@ function GameShell() {
           <header className="sticky top-0 z-30 border-b border-white/10 bg-[#130a2f]/85 backdrop-blur-lg">
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 sm:px-4 py-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="font-display text-base sm:text-xl font-black tracking-tight bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent truncate">
-                  MIMIC
+                <span className="font-display text-sm sm:text-lg font-black tracking-tight bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent truncate">
+                  ЖЕКБОКС
                 </span>
                 <span className="rounded-lg bg-white/10 px-2 py-0.5 font-display text-[11px] font-bold tracking-widest text-cyan-200 shrink-0">
                   #{room.code}
@@ -116,7 +121,7 @@ function GameShell() {
         )}
 
         {/* Main Animated View */}
-        <main className="flex-1 flex flex-col justify-center">
+        <main className="relative z-10 flex-1 flex flex-col justify-center">
           <AnimatePresence mode="wait">
             <motion.div
               key={phaseKey}
@@ -160,6 +165,7 @@ function GameShell() {
                 <GalleryPhase
                   room={room}
                   me={me}
+                  reactions={reactions}
                   recordingMedia={recordingMedia}
                   onClipEnded={galleryClipEnded}
                   onSendReaction={sendReaction}

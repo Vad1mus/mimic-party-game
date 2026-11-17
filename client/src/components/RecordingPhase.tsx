@@ -48,11 +48,34 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
   const stoppedRef = useRef(false);
 
   const myRec = room.recordings[me.id];
+  const hasMyRec = Boolean(myRec);
   const isSequential = room.settings.recordingMode === 'sequential';
   const isMyTurn = !isSequential || room.activeTurnPlayerId === me.id;
   const activeTurnPlayer = room.players.find((p) => p.id === room.activeTurnPlayerId);
   const meme = room.selectedMeme;
   const exactDuration = originalBuffer?.duration || meme?.duration || 4.0;
+
+  // Refs so async audio decoding or parent callbacks NEVER cancel the 3-2-1 countdown timers!
+  const originalBufferRef = useRef<AudioBuffer | null>(null);
+  const exactDurationRef = useRef<number>(exactDuration);
+  const createRecorderRef = useRef(createRecorder);
+  const onSkipRef = useRef(onSkipRecording);
+
+  useEffect(() => {
+    originalBufferRef.current = originalBuffer;
+  }, [originalBuffer]);
+
+  useEffect(() => {
+    exactDurationRef.current = exactDuration;
+  }, [exactDuration]);
+
+  useEffect(() => {
+    createRecorderRef.current = createRecorder;
+  }, [createRecorder]);
+
+  useEffect(() => {
+    onSkipRef.current = onSkipRecording;
+  }, [onSkipRecording]);
 
   // Decode original meme audio for HTML5 Canvas Waveform Overlay & exact duration
   useEffect(() => {
@@ -61,11 +84,14 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
     decodeAndNormalizeAudio(resolveMediaUrl(meme.url))
       .then((buf) => {
         if (cancelled) return;
+        originalBufferRef.current = buf;
+        exactDurationRef.current = buf.duration || meme.duration || 4.0;
         setOriginalBuffer(buf);
         setOriginalPeaks(extractWaveformPeaks(buf, 120));
       })
       .catch(() => {
         if (!cancelled) {
+          originalBufferRef.current = null;
           setOriginalBuffer(null);
           setOriginalPeaks(new Array(120).fill(0.2));
         }
@@ -73,11 +99,14 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [meme?.url]);
+  }, [meme?.url, meme?.duration]);
 
   const finishAndUpload = useCallback(
     async (blob: Blob, recordedDur: number) => {
       setUploading(true);
+      const origBuf = originalBufferRef.current;
+      const targetDur = exactDurationRef.current;
+
       let analysis: VoiceAnalysisMetrics = {
         similarity: 0,
         timingScore: 0,
@@ -86,13 +115,13 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
         activeDuration: 0,
         isSilent: true,
       };
-      let actualDuration = Number(recordedDur.toFixed(2)) || exactDuration;
+      let actualDuration = Number(recordedDur.toFixed(2)) || targetDur;
 
       try {
         const playerBuffer = await decodeAndNormalizeAudio(blob);
         actualDuration = Number(playerBuffer.duration.toFixed(2)) || actualDuration;
-        if (originalBuffer) {
-          analysis = analyzeVoiceSimilarity(originalBuffer, playerBuffer);
+        if (origBuf) {
+          analysis = analyzeVoiceSimilarity(origBuf, playerBuffer);
         }
       } catch {
         analysis = {
@@ -118,13 +147,18 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
         setUploading(false);
       }
     },
-    [exactDuration, originalBuffer, onSubmitRecording]
+    [onSubmitRecording]
   );
+
+  const finishAndUploadRef = useRef(finishAndUpload);
+  useEffect(() => {
+    finishAndUploadRef.current = finishAndUpload;
+  }, [finishAndUpload]);
 
   // Automatic 3 -> 2 -> 1 -> ГОВОРИ! -> Record strictly for exactDuration -> Auto-Stop & Upload!
   useEffect(() => {
-    if (!isMyTurn || myRec || startedRef.current) return;
-    if (micStatus !== 'granted') return;
+    if (!isMyTurn || hasMyRec || micStatus !== 'granted') return;
+    if (startedRef.current) return;
 
     startedRef.current = true;
     stoppedRef.current = false;
@@ -153,7 +187,7 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
         setCountdownLabel('ГОВОРИ!');
         soundFx.startRecord();
 
-        const created = createRecorder();
+        const created = createRecorderRef.current();
         if (!created) {
           setCountdownLabel(null);
           return;
@@ -175,9 +209,9 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
           const blob =
             chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mimeType }) : null;
           if (blob && blob.size >= 150) {
-            void finishAndUpload(blob, dur);
+            void finishAndUploadRef.current(blob, dur);
           } else {
-            onSkipRecording();
+            onSkipRef.current();
           }
         };
 
@@ -190,7 +224,8 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
         const loop = () => {
           const elapsed = (performance.now() - recStartMs) / 1000;
           setElapsedSec(elapsed);
-          if (elapsed >= exactDuration) {
+          const targetDur = exactDurationRef.current;
+          if (elapsed >= targetDur) {
             if (!stoppedRef.current && recorder.state !== 'inactive') {
               stoppedRef.current = true;
               recorder.stop();
@@ -214,18 +249,11 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
           // ignore
         }
       }
+      // Allow clean restart if unmounted/remounted (e.g. React StrictMode double-invoke in dev)
+      startedRef.current = false;
     };
-  }, [
-    isMyTurn,
-    myRec,
-    micStatus,
-    createRecorder,
-    exactDuration,
-    finishAndUpload,
-    onSkipRecording,
-  ]);
+  }, [isMyTurn, hasMyRec, micStatus]);
 
-  // Reset per-turn trigger when sequential turn changes
   useEffect(() => {
     if (!isMyTurn) {
       startedRef.current = false;
@@ -274,7 +302,7 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
               {myRec.skipped ? 'Раунд пропущен' : 'Готово! Пародия отправлена!'}
             </h3>
             <p className="text-xs sm:text-sm text-white/65">
-              Ждём остальных — Галерея славы откроется автоматически!
+              Ждём остальных — сейчас все выступят на сцене!
             </p>
           </div>
         ) : !isMyTurn ? (
@@ -323,7 +351,7 @@ export const RecordingPhase: React.FC<RecordingPhaseProps> = ({
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1.1, opacity: 1 }}
                   exit={{ scale: 1.4, opacity: 0 }}
-                  transition={{ duration: 0.25 }}
+                  transition={{ duration: 0.2 }}
                   className={`font-display font-black tracking-wide ${
                     countdownLabel === 'ГОВОРИ!'
                       ? 'text-3xl sm:text-5xl text-emerald-300 drop-shadow-[0_0_24px_rgba(52,211,153,0.8)]'

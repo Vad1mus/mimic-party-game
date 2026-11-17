@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CharacterId } from '../types/game';
+import { AudienceMood, CharacterId } from '../types/game';
+
+const AvatarMoodContext = createContext<AudienceMood>('idle');
 
 interface CharacterAvatarProps {
   characterId: CharacterId;
@@ -9,6 +11,7 @@ interface CharacterAvatarProps {
   isSpeaking?: boolean;
   dimmed?: boolean;
   idle?: boolean;
+  mood?: AudienceMood;
   className?: string;
 }
 
@@ -19,6 +22,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
   isSpeaking = false,
   dimmed = false,
   idle = true,
+  mood = 'idle',
   className = '',
 }) => {
   const [blink, setBlink] = useState(false);
@@ -37,37 +41,122 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
     return () => clearTimeout(timeoutId);
   }, []);
 
-  const clampedMouth = Math.max(0, Math.min(1, mouthOpen));
+  const moodMouth =
+    mood === 'laugh'
+      ? 0.68
+      : mood === 'surprised'
+      ? 0.85
+      : mood === 'cry'
+      ? 0.5
+      : mood === 'cheer'
+      ? 0.55
+      : 0;
+  const clampedMouth = Math.max(0, Math.min(1, isSpeaking ? mouthOpen : Math.max(mouthOpen, moodMouth)));
   const jawHeight = 3 + clampedMouth * 15;
   const bounceY = isSpeaking ? -clampedMouth * 12 : 0;
 
+  const animateProps = isSpeaking
+    ? {
+        y: bounceY,
+        rotate: clampedMouth > 0.5 ? [-2, 2, 0] : 0,
+        opacity: dimmed ? 0.55 : 1,
+        scale: 1 + clampedMouth * 0.07,
+      }
+    : mood === 'laugh'
+    ? {
+        y: [0, -7, 0, -5, 0],
+        rotate: [-4, 4, -4],
+        opacity: dimmed ? 0.8 : 1,
+        scale: 1.04,
+      }
+    : mood === 'surprised'
+    ? {
+        y: [0, -10, -2],
+        rotate: [0, -5, 5, 0],
+        opacity: dimmed ? 0.85 : 1,
+        scale: [1, 1.12, 1.05],
+      }
+    : mood === 'cry'
+    ? {
+        y: [0, 2, 0],
+        rotate: [-3, 3, -3],
+        opacity: dimmed ? 0.8 : 1,
+        scale: 0.98,
+      }
+    : mood === 'cheer'
+    ? {
+        y: [0, -9, 0],
+        rotate: [-3, 3, -3],
+        opacity: dimmed ? 0.85 : 1,
+        scale: 1.05,
+      }
+    : {
+        y: idle ? [0, -4, 0] : 0,
+        rotate: idle ? [-1.2, 1.2, -1.2] : 0,
+        opacity: dimmed ? 0.65 : 1,
+        scale: 1,
+      };
+
+  const transitionProps = isSpeaking
+    ? { type: 'spring' as const, stiffness: 420, damping: 20 }
+    : mood !== 'idle'
+    ? { duration: mood === 'laugh' ? 0.45 : 0.65, repeat: Infinity, ease: 'easeInOut' as const }
+    : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' as const };
+
   return (
     <motion.div
-      className={`inline-flex items-center justify-center select-none ${className}`}
+      className={`relative inline-flex items-center justify-center select-none ${className}`}
       style={{ width: size, height: size }}
-      animate={{
-        y: isSpeaking ? bounceY : idle ? [0, -4, 0] : 0,
-        rotate: isSpeaking ? (clampedMouth > 0.5 ? [-2, 2, 0] : 0) : idle ? [-1.2, 1.2, -1.2] : 0,
-        opacity: dimmed ? 0.42 : 1,
-        scale: isSpeaking ? 1 + clampedMouth * 0.06 : 1,
-      }}
-      transition={
-        isSpeaking
-          ? { type: 'spring', stiffness: 420, damping: 20 }
-          : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }
-      }
+      animate={animateProps}
+      transition={transitionProps}
     >
-      <svg
-        viewBox="0 0 120 120"
-        width={size}
-        height={size}
-        className="overflow-visible drop-shadow-[0_10px_18px_rgba(0,0,0,0.45)]"
-      >
-        {renderCharacterSvg(characterId, blink, jawHeight, clampedMouth)}
-      </svg>
+      <AvatarMoodContext.Provider value={mood}>
+        <svg
+          viewBox="0 0 120 120"
+          width={size}
+          height={size}
+          className="overflow-visible drop-shadow-[0_10px_18px_rgba(0,0,0,0.45)]"
+        >
+          {renderCharacterSvg(characterId, blink, jawHeight, clampedMouth)}
+          {renderMoodOverlay(mood)}
+        </svg>
+      </AvatarMoodContext.Provider>
     </motion.div>
   );
 };
+
+function renderMoodOverlay(mood: AudienceMood) {
+  if (mood === 'laugh') {
+    return (
+      <g>
+        {/* Happy squinting eye arches & blushing cheeks */}
+        <circle cx="29" cy="67" r="6" fill="#fb7185" opacity="0.55" />
+        <circle cx="91" cy="67" r="6" fill="#fb7185" opacity="0.55" />
+      </g>
+    );
+  }
+  if (mood === 'cry') {
+    return (
+      <g>
+        {/* Animated cartoon tear streams */}
+        <path d="M38,60 Q32,74 34,88" stroke="#38bdf8" strokeWidth="4.5" strokeLinecap="round" fill="none" opacity="0.9" />
+        <circle cx="34" cy="92" r="3.5" fill="#7dd3fc" />
+        <path d="M82,60 Q88,74 86,88" stroke="#38bdf8" strokeWidth="4.5" strokeLinecap="round" fill="none" opacity="0.9" />
+        <circle cx="86" cy="92" r="3.5" fill="#7dd3fc" />
+      </g>
+    );
+  }
+  if (mood === 'surprised') {
+    return (
+      <g stroke="#fde047" strokeWidth="3" strokeLinecap="round">
+        <line x1="16" y1="22" x2="26" y2="30" />
+        <line x1="104" y1="22" x2="94" y2="30" />
+        <line x1="60" y1="4" x2="60" y2="14" />
+      </g>
+    );
+  }
+  return null;
+}
 
 function Eyes({
   blink,
@@ -84,6 +173,37 @@ function Eyes({
   eyeColor?: string;
   glow?: boolean;
 }) {
+  const mood = useContext(AvatarMoodContext);
+
+  if (mood === 'laugh' || mood === 'cheer') {
+    return (
+      <g stroke={eyeColor} strokeWidth="3.5" strokeLinecap="round" fill="none">
+        <path d={`M${leftX - 6},${y + 2} Q${leftX},${y - 7} ${leftX + 6},${y + 2}`} />
+        <path d={`M${rightX - 6},${y + 2} Q${rightX},${y - 7} ${rightX + 6},${y + 2}`} />
+      </g>
+    );
+  }
+
+  if (mood === 'cry') {
+    return (
+      <g stroke={eyeColor} strokeWidth="3.5" strokeLinecap="round" fill="none">
+        <path d={`M${leftX - 6},${y - 3} L${leftX + 5},${y + 2} L${leftX - 6},${y + 5}`} />
+        <path d={`M${rightX + 6},${y - 3} L${rightX - 5},${y + 2} L${rightX + 6},${y + 5}`} />
+      </g>
+    );
+  }
+
+  if (mood === 'surprised') {
+    return (
+      <g>
+        <circle cx={leftX} cy={y} r="9.5" fill="#ffffff" stroke={eyeColor} strokeWidth="1.5" />
+        <circle cx={rightX} cy={y} r="9.5" fill="#ffffff" stroke={eyeColor} strokeWidth="1.5" />
+        <circle cx={leftX} cy={y} r="2.8" fill={eyeColor} />
+        <circle cx={rightX} cy={y} r="2.8" fill={eyeColor} />
+      </g>
+    );
+  }
+
   if (blink) {
     return (
       <g stroke={eyeColor} strokeWidth="3.2" strokeLinecap="round">
@@ -384,6 +504,52 @@ function renderCharacterSvg(
           <ellipse cx="64" cy="10" rx="5" ry="3" transform="rotate(-20 64 10)" fill="#4ade80" stroke="#14532d" strokeWidth="1.2" />
           <Eyes blink={blink} leftX={40} rightX={80} y={50} eyeColor="#291509" />
           <Mouth y={83} jawHeight={jawHeight} openRatio={openRatio} fill="#451a03" tongue="#fb7185" />
+        </g>
+      );
+
+    case 'shrek':
+      return (
+        <g>
+          {/* Iconic Shrek trumpet ears */}
+          <path d="M25,44 L10,32 L12,24 L28,36 Z" fill="#84cc16" stroke="#365314" strokeWidth="2.5" strokeLinejoin="round" />
+          <ellipse cx="10" cy="28" rx="4" ry="6" transform="rotate(-25 10 28)" fill="#65a30d" stroke="#365314" strokeWidth="2" />
+          <path d="M95,44 L110,32 L108,24 L92,36 Z" fill="#84cc16" stroke="#365314" strokeWidth="2.5" strokeLinejoin="round" />
+          <ellipse cx="110" cy="28" rx="4" ry="6" transform="rotate(25 110 28)" fill="#65a30d" stroke="#365314" strokeWidth="2" />
+          {/* Big ogre head */}
+          <ellipse cx="60" cy="60" rx="37" ry="42" fill="#a3e635" stroke="#365314" strokeWidth="2.8" />
+          <path d="M28,44 Q60,36 92,44" stroke="#4d7c0f" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+          {/* Vest collar at bottom */}
+          <polygon points="32,96 60,88 88,96 82,108 38,108" fill="#78350f" stroke="#451a03" strokeWidth="2" />
+          {/* Big ogre nose */}
+          <ellipse cx="60" cy="64" rx="11" ry="8" fill="#84cc16" stroke="#4d7c0f" strokeWidth="2" />
+          <circle cx="55" cy="65" r="2.2" fill="#365314" />
+          <circle cx="65" cy="65" r="2.2" fill="#365314" />
+          <Eyes blink={blink} leftX={42} rightX={78} y={50} eyeColor="#3f2305" />
+          <Mouth y={81} jawHeight={jawHeight} openRatio={openRatio} fill="#450a0a" tongue="#fb7185" />
+        </g>
+      );
+
+    case 'ershik':
+      return (
+        <g>
+          {/* Plastic handle at the bottom */}
+          <rect x="52" y="88" width="16" height="24" rx="6" fill="#06b6d4" stroke="#083344" strokeWidth="2.5" />
+          <rect x="46" y="84" width="28" height="8" rx="4" fill="#22d3ee" stroke="#083344" strokeWidth="2" />
+          {/* Fluffy spiky brush bristles (low-poly starburst) */}
+          <polygon
+            points="60,10 71,21 86,14 88,29 103,34 96,49 106,63 92,72 94,85 78,84 60,90 42,84 26,85 28,72 14,63 24,49 17,34 32,29 34,14 49,21"
+            fill="#f8fafc"
+            stroke="#0e7490"
+            strokeWidth="2.6"
+            strokeLinejoin="round"
+          />
+          {/* Blue bristle stripes */}
+          <polygon points="60,16 68,26 52,26" fill="#38bdf8" opacity="0.7" />
+          <polygon points="24,48 34,42 34,54" fill="#38bdf8" opacity="0.7" />
+          <polygon points="96,48 86,42 86,54" fill="#38bdf8" opacity="0.7" />
+          {/* Googly eyes & funny mouth */}
+          <Eyes blink={blink} leftX={45} rightX={75} y={48} eyeColor="#0f172a" />
+          <Mouth y={70} jawHeight={jawHeight} openRatio={openRatio} fill="#083344" tongue="#f472b6" />
         </g>
       );
 

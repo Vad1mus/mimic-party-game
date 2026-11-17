@@ -21,7 +21,9 @@ export type CharacterId =
   | 'owl'
   | 'dino'
   | 'bear'
-  | 'octopus';
+  | 'octopus'
+  | 'shrek'
+  | 'ershik';
 
 export interface CharacterMeta {
   id: CharacterId;
@@ -43,6 +45,8 @@ export const CHARACTER_LIST: CharacterMeta[] = [
   { id: 'dino', name: 'Дино', primary: '#fb7185', secondary: '#be123c' },
   { id: 'bear', name: 'Медведь', primary: '#fbbf24', secondary: '#b45309' },
   { id: 'octopus', name: 'Осьминог', primary: '#e879f9', secondary: '#a21caf' },
+  { id: 'shrek', name: 'Шрек', primary: '#84cc16', secondary: '#4d7c0f' },
+  { id: 'ershik', name: 'Ёршик', primary: '#22d3ee', secondary: '#0891b2' },
 ];
 
 export const CHARACTER_CATALOG: Record<CharacterId, CharacterMeta> = Object.fromEntries(
@@ -161,4 +165,6 @@ export interface ReactionEvent {
   timestamp: number;
 }
 
-export const REACTION_EMOJIS = ['😂', '🔥', '🎭', '👏', '💀', '🤯'];
+export type AudienceMood = 'idle' | 'laugh' | 'surprised' | 'cry' | 'cheer';
+
+export const REACTION_EMOJIS = ['😂', '😭', '😮', '🔥', '👏', '💀'];
